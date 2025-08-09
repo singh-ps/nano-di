@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace ReferenceResolver
+namespace NanoDI
 {
 	[ExecuteAlways]
 	public class SceneBootStrapper : MonoBehaviour

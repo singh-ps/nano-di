@@ -2,9 +2,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 
-namespace ReferenceResolver
+namespace NanoDI
 {
-	[CreateAssetMenu(menuName = "Reference Resolver/Bootstrapper")]
+	[CreateAssetMenu(menuName = "NanoDI/Bootstrapper")]
 	public class Bootstrapper: ScriptableObject
 	{
 		[SerializeField] private List<ReferenceBinder> definitions = new();

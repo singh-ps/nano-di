@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace ReferenceResolver
+namespace NanoDI
 {
 	public abstract class ReferenceBinder: ScriptableObject
 	{

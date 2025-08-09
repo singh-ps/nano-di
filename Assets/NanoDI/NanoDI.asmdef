@@ -1,6 +1,6 @@
 {
-    "name": "ReferenceResolver",
-    "rootNamespace": "ReferenceResolver",
+    "name": "NanoDI",
+    "rootNamespace": "NanoDI",
     "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
