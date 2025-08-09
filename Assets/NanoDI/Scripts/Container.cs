@@ -51,6 +51,11 @@ namespace NanoDI
 
 			InjectMembers(instance);
 
+			if (instance is IInitializable init)
+			{
+				init.Initialize();
+			}
+
 			references[instanceType] = instance;
 
 			return instance;
