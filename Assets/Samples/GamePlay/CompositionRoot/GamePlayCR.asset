@@ -12,3 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ddfcd34ff4e17de47b577724eb9a7cb9, type: 3}
   m_Name: GamePlayCR
   m_EditorClassIdentifier: 
+  weaponPrefab: {fileID: 6756307232485374196, guid: d9fcfbc82be1ee14f91a28447e173207, type: 3}
