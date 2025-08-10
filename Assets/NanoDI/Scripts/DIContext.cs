@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace NanoDI
 {
-	[CreateAssetMenu(menuName = "NanoDI/GlDIContext")]
+	[CreateAssetMenu(menuName = "NanoDI/DIContext")]
 	public class DIContext: ScriptableObject
 	{
 		[SerializeField] private List<CompositionRoot> compositions = new();
@@ -38,7 +38,7 @@ namespace NanoDI
 
 			if (enabledCtx.Length == 0)
 			{
-				Debug.LogWarning("[GlobalDIContext] Diabled global DI context found.");
+				Debug.LogWarning("[GlobalDIContext] Disabled global DI context found.");
 				return;
 			}
 
