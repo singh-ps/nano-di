@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace NanoDI
 {
-	[CreateAssetMenu(menuName = "NanoDI/DIContext")]
+	[CreateAssetMenu(menuName = "NanoDI/GlDIContext")]
 	public class DIContext: ScriptableObject
 	{
 		[SerializeField] private List<CompositionRoot> compositions = new();

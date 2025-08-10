@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using UnityEngine;
 
 namespace NanoDI
 {
@@ -21,6 +22,13 @@ namespace NanoDI
 		}
 
 		public T Get<T>() => (T)Resolve(typeof(T));
+
+		public PrefabFactory<T> CreateFactory<T>(T prefab) where T : Component, IInitializable
+		{
+			PrefabFactory <T> factory = new PrefabFactory<T>(this, prefab);
+			references[typeof(PrefabFactory<T>)] = factory;
+			return factory;
+		}
 
 		public void ClearBindings()
 		{
@@ -80,6 +88,15 @@ namespace NanoDI
 			{
 				object value = Resolve(prop.PropertyType);
 				prop.SetValue(instance, value);
+			}
+		}
+
+		public void InjectGameObject(GameObject go)
+		{
+			foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true))
+			{
+				InjectMembers(mb);
+				if (mb is IInitializable init) init.Initialize();
 			}
 		}
 	}
