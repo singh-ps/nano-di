@@ -4,8 +4,8 @@ namespace NanoDI
 {
 	public sealed class PrefabFactory<T> : IPrefabFactory<T> where T : Component, IInitializable
 	{
-		private Container container;
-		private T prefab;
+		private readonly Container container;
+		private readonly T prefab;
 
 		public PrefabFactory(Container container, T prefab)
 		{
@@ -26,10 +26,8 @@ namespace NanoDI
 			{
 				go.name = name;
 			}
-			go.SetActive(false);
 			T component = go.GetComponent<T>();
 			container.InjectGameObject(go);
-			go.SetActive(true);
 			return component;
 		}
 	}
