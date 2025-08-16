@@ -1,102 +1,120 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
 namespace NanoDI
 {
-	public class Container
+	public sealed class Container
 	{
-		private readonly Dictionary<Type, object> references = new();
+		private readonly Dictionary<Type, object> instances = new();
+		private readonly Dictionary<Type, FieldInfo[]> injFieldCache = new();
 
-		public void BindNew<T>() where T : new()
-		{
-			object instance = (T)Resolve(typeof(T));
-			references[typeof(T)] = instance;
-		}
+		const BindingFlags FLAGS = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
+		/// <summary>
+		/// Bind an existing, fully constructed instance. Does NOT inject or initialize.
+		/// Duplicate binds are illegal and throw.
+		/// </summary>
 		public void Bind<T>(T instance)
 		{
-			references.Add(typeof(T), instance);
+			if (instance == null) throw new ArgumentNullException(nameof(instance));
+			Type key = typeof(T);
+			if (instances.ContainsKey(key))
+				throw new InvalidOperationException($"[Container] Duplicate bind for {key}. This is likely a mistake.");
+			instances[key] = instance!;
 		}
 
-		public T Get<T>() => (T)Resolve(typeof(T));
+		/// <summary>
+		/// Create a new instance via parameterless constructor (new T()), then perform FIELD injection,
+		/// ALWAYS call Initialize() if implemented, and finally store it.
+		/// Throws if a dependency is missing or T already bound.
+		/// </summary>
+		public T BindNew<T>() where T : new()
+		{
+			Type key = typeof(T);
+			if (instances.ContainsKey(key))
+				throw new InvalidOperationException($"[Container] Duplicate bind for {key}. This is likely a mistake.");
+
+			T instance = new T();
+			Inject(instance); // throws if missing deps
+			if (instance is IInitializable init) init.Initialize();
+			instances[key] = instance;
+			return instance;
+		}
+
+		/// <summary>
+		/// Inject FIELD dependencies into an arbitrary object. Throws if any dependency is missing.
+		/// </summary>
+		internal void Inject(object instance)
+		{
+			if (instance == null) throw new ArgumentNullException(nameof(instance));
+			Type type = instance.GetType();
+			FieldInfo[] fields = GetInjectFields(type);
+			for (int i = 0; i < fields.Length; i++)
+			{
+				FieldInfo f = fields[i];
+				Type depType = f.FieldType;
+				if (!instances.TryGetValue(depType, out object dep))
+					throw new InvalidOperationException($"[Container] Missing binding for dependency {depType} required by {type}.{f.Name}");
+				f.SetValue(instance, dep);
+			}
+		}
+
+		private FieldInfo[] GetInjectFields(Type type)
+		{
+			if (injFieldCache.TryGetValue(type, out FieldInfo[] cached))
+				return cached;
+
+			
+			FieldInfo[] all = type.GetFields(FLAGS);
+			List<FieldInfo> list = new List<FieldInfo>(all.Length);
+			for (int i = 0; i < all.Length; i++)
+			{
+				FieldInfo f = all[i];
+				if (f.IsDefined(typeof(InjectAttribute), inherit: true))
+					list.Add(f);
+			}
+
+			var arr = list.Count == 0 ? Array.Empty<FieldInfo>() : list.ToArray();
+			injFieldCache[type] = arr;
+			return arr;
+		}
 
 		public PrefabFactory<T> CreateFactory<T>(T prefab) where T : Component, IInitializable
 		{
 			PrefabFactory <T> factory = new PrefabFactory<T>(this, prefab);
-			references[typeof(PrefabFactory<T>)] = factory;
+			instances[typeof(PrefabFactory<T>)] = factory;
+			return factory;
+		}
+
+		public Factory<T> CreateFactory<T>() where T : IInitializable, new()
+		{
+			Factory<T> factory = new Factory<T>(this);
+			instances[typeof(Factory<T>)] = factory;
 			return factory;
 		}
 
 		public void ClearBindings()
 		{
-			references.Clear();
+			instances.Clear();
 		}
 
-		private object Resolve(Type instanceType)
+		/// <summary>
+		/// Inject FIELD dependencies for all MonoBehaviours in a GameObject hierarchy.
+		/// Calls Initialize() on components that implement IInitializable.
+		/// Throws if any dependency is missing.
+		/// </summary>
+		internal void InjectGameObject(GameObject go, bool callInitialize = true)
 		{
-			if (references.TryGetValue(instanceType, out object instance))
-				return instance;
-
-			Type implType = instanceType.IsInterface || instanceType.IsAbstract
-				? throw new InvalidOperationException($"No binding for {instanceType}")
-				: instanceType;
-
-			ConstructorInfo ctor = implType.GetConstructors()
-				.FirstOrDefault(c => c.IsDefined(typeof(InjectAttribute), true))
-				??
-				implType.GetConstructors()
-					.OrderByDescending(c => c.GetParameters().Length)
-					.First();
-
-			object[] args = ctor.GetParameters()
-						   .Select(p => Resolve(p.ParameterType))
-						   .ToArray();
-
-			instance = ctor.Invoke(args);
-
-			InjectMembers(instance);
-
-			if (instance is IInitializable init)
+			if (go == null) return;
+			var behaviours = go.GetComponentsInChildren<MonoBehaviour>(true);
+			for (int i = 0; i < behaviours.Length; i++)
 			{
-				init.Initialize();
-			}
-
-			references[instanceType] = instance;
-
-			return instance;
-		}
-
-		private void InjectMembers(object instance)
-		{
-			Type type = instance.GetType();
-
-			foreach (FieldInfo field in type
-					 .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-					 .Where(f => f.IsDefined(typeof(InjectAttribute), true)))
-			{
-				object value = Resolve(field.FieldType);
-				field.SetValue(instance, value);
-			}
-
-			foreach (PropertyInfo prop in type
-					 .GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-					 .Where(p => p.IsDefined(typeof(InjectAttribute), true)
-								 && p.CanWrite))
-			{
-				object value = Resolve(prop.PropertyType);
-				prop.SetValue(instance, value);
-			}
-		}
-
-		public void InjectGameObject(GameObject go)
-		{
-			foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true))
-			{
-				InjectMembers(mb);
-				if (mb is IInitializable init) init.Initialize();
+				var mb = behaviours[i];
+				if (mb == null) continue; // In case of missing scripts
+				Inject(mb);
+				if (callInitialize && mb is IInitializable init) init.Initialize();
 			}
 		}
 	}
