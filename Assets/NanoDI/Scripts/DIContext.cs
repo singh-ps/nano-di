@@ -1,6 +1,6 @@
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
-using System.Linq;
 
 namespace NanoDI
 {
@@ -19,7 +19,8 @@ namespace NanoDI
 
 			container = new Container();
 
-			for (int i = 0; i < compositions.Count; i++)
+			int count = compositions.Count;
+			for (int i = 0; i < count; i++)
 			{
 				compositions[i].Compose(container);
 			}
@@ -34,21 +35,43 @@ namespace NanoDI
 				throw new System.Exception("[DIContext] No global DI context found");
 			}
 
-			DIContext[] enabledCtx = ctx.Where(b => b.enabled).ToArray();
+			DIContext enabledContext = null;
+			int enabledCount = 0;
 
-			if (enabledCtx.Length == 0)
+			for (int i = 0; i < ctx.Length; i++)
+			{
+				if (ctx[i].enabled)
+				{
+					enabledCount++;
+					if (enabledContext == null)
+						enabledContext = ctx[i];
+				}
+			}
+
+			if (enabledCount == 0)
 			{
 				Debug.LogWarning("[GlobalDIContext] Disabled global DI context found.");
 				return;
 			}
 
-			if (enabledCtx.Length > 1)
+			if (enabledCount > 1)
 			{
-				string names = string.Join(", ", enabledCtx.Select(b => b.name));
-				throw new System.Exception($"[DIContext] Multiple enabled global DI contexts found: {names}. Only one is allowed.");
+				StringBuilder errorMsg = new StringBuilder("[DIContext] Multiple enabled global DI contexts found: ");
+				bool first = true;
+				for (int i = 0; i < ctx.Length; i++)
+				{
+					if (ctx[i].enabled)
+					{
+						if (!first) errorMsg.Append(", ");
+						errorMsg.Append(ctx[i].name);
+						first = false;
+					}
+				}
+				errorMsg.Append(". Only one is allowed.");
+				throw new System.Exception(errorMsg.ToString());
 			}
 
-			enabledCtx[0].Create();
+			enabledContext.Create();
 		}
 	}
 }
