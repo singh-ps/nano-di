@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace NanoDI
 {
@@ -6,6 +7,8 @@ namespace NanoDI
 	{
 		private readonly Container container;
 		private readonly T prefab;
+
+		private List<MonoBehaviour> buffer = new List<MonoBehaviour>(128);
 
 		public PrefabFactory(Container container, T prefab)
 		{
@@ -27,7 +30,22 @@ namespace NanoDI
 				go.name = name;
 			}
 			T component = go.GetComponent<T>();
-			container.InjectGameObject(go);
+
+			buffer.Clear();
+			go.GetComponentsInChildren(true, buffer);
+			for (int i = 0; i < buffer.Count; i++)
+			{
+				MonoBehaviour mb = buffer[i];
+				if (mb == null)
+				{
+					continue;
+				}
+				container.Inject(mb);
+				if (mb is IInitializable init)
+				{
+					init.Initialize();
+				}
+			} 
 			return component;
 		}
 	}
