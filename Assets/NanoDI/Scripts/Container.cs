@@ -9,8 +9,9 @@ namespace NanoDI
 	{
 		private readonly Dictionary<Type, object> instances = new();
 		private readonly Dictionary<Type, FieldInfo[]> injFieldCache = new();
+		private readonly Dictionary<Type, Action<object, Container>> compiledInjectors = new();
 
-		const BindingFlags FLAGS = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+		const BindingFlags FLAGS = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
 		/// <summary>
 		/// Bind an existing, fully constructed instance. Does NOT inject or initialize.
@@ -50,72 +51,88 @@ namespace NanoDI
 		{
 			if (instance == null) throw new ArgumentNullException(nameof(instance));
 			Type type = instance.GetType();
-			FieldInfo[] fields = GetInjectFields(type);
-			for (int i = 0; i < fields.Length; i++)
+			
+			// Try compiled injector first (fastest path)
+			if (compiledInjectors.TryGetValue(type, out Action<object, Container> compiledInjector))
 			{
-				FieldInfo f = fields[i];
-				Type depType = f.FieldType;
-				if (!instances.TryGetValue(depType, out object dep))
-					throw new InvalidOperationException($"[Container] Missing binding for dependency {depType} required by {type}.{f.Name}");
-				f.SetValue(instance, dep);
+				compiledInjector(instance, this);
+				return;
+			}
+			
+			FieldInfo[] fields = GetInjectFields(type);
+
+			// Create compiled injector for future use
+			if (fields.Length > 0)
+			{
+				Action<object, Container> injector = CreateCompiledInjector(type, fields);
+				compiledInjectors[type] = injector;
+				injector(instance, this);
 			}
 		}
 
 		private FieldInfo[] GetInjectFields(Type type)
 		{
-			if (injFieldCache.TryGetValue(type, out FieldInfo[] cached))
+			if (injFieldCache.TryGetValue(type, out var cached))
 				return cached;
 
-			
-			FieldInfo[] all = type.GetFields(FLAGS);
-			List<FieldInfo> list = new List<FieldInfo>(all.Length);
-			for (int i = 0; i < all.Length; i++)
+			List<FieldInfo> list = new List<FieldInfo>(8);
+			Type t = type;
+			while (t != null && t != typeof(object))
 			{
-				FieldInfo f = all[i];
-				if (f.IsDefined(typeof(InjectAttribute), inherit: true))
-					list.Add(f);
+				FieldInfo[] fields = t.GetFields(FLAGS);
+				for (int i = 0; i < fields.Length; i++)
+				{
+					FieldInfo f = fields[i];
+					if (Attribute.IsDefined(f, typeof(InjectAttribute), inherit: true))
+						list.Add(f);
+				}
+				t = t.BaseType;
 			}
 
-			var arr = list.Count == 0 ? Array.Empty<FieldInfo>() : list.ToArray();
+			FieldInfo[] arr = list.Count == 0 ? Array.Empty<FieldInfo>() : list.ToArray();
 			injFieldCache[type] = arr;
 			return arr;
 		}
 
-		public PrefabFactory<T> CreateFactory<T>(T prefab) where T : Component, IInitializable
+		public void BindFactory<T>(T prefab) where T : Component, IInitializable
 		{
-			PrefabFactory <T> factory = new PrefabFactory<T>(this, prefab);
+			if (instances.ContainsKey(typeof(PrefabFactory<T>)))
+				throw new InvalidOperationException($"[Container] Duplicate bind for PrefabFactory<{typeof(T)}>.");
+
+			PrefabFactory<T> factory = new PrefabFactory<T>(this, prefab);
 			instances[typeof(PrefabFactory<T>)] = factory;
-			return factory;
 		}
 
-		public Factory<T> CreateFactory<T>() where T : IInitializable, new()
+		public void BindFactory<T>() where T : IInitializable, new()
 		{
+			if (instances.ContainsKey(typeof(Factory<T>)))
+				throw new InvalidOperationException($"[Container] Duplicate bind for Factory<{typeof(T)}>.");
+
 			Factory<T> factory = new Factory<T>(this);
 			instances[typeof(Factory<T>)] = factory;
-			return factory;
 		}
 
 		public void ClearBindings()
 		{
 			instances.Clear();
+			injFieldCache.Clear();
+			compiledInjectors.Clear();
 		}
 
-		/// <summary>
-		/// Inject FIELD dependencies for all MonoBehaviours in a GameObject hierarchy.
-		/// Calls Initialize() on components that implement IInitializable.
-		/// Throws if any dependency is missing.
-		/// </summary>
-		internal void InjectGameObject(GameObject go, bool callInitialize = true)
+		private Action<object, Container> CreateCompiledInjector(Type type, FieldInfo[] fields)
 		{
-			if (go == null) return;
-			var behaviours = go.GetComponentsInChildren<MonoBehaviour>(true);
-			for (int i = 0; i < behaviours.Length; i++)
+			// Simple delegate compilation for better performance
+			return (instance, container) =>
 			{
-				var mb = behaviours[i];
-				if (mb == null) continue; // In case of missing scripts
-				Inject(mb);
-				if (callInitialize && mb is IInitializable init) init.Initialize();
-			}
+				for (int i = 0; i < fields.Length; i++)
+				{
+					FieldInfo f = fields[i];
+					Type depType = f.FieldType;
+					if (!container.instances.TryGetValue(depType, out object dep))
+						throw new InvalidOperationException($"[Container] Missing binding for dependency {depType} required by {type}.{f.Name}");
+					f.SetValue(instance, dep);
+				}
+			};
 		}
 	}
 }
