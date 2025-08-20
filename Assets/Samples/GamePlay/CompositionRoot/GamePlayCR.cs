@@ -11,8 +11,8 @@ namespace GamePlay
 
 		public override void Compose(Container container)
 		{
-			container.CreateFactory(playerPrefab);
-			container.CreateFactory(weaponPrefab);
+			container.BindFactory(playerPrefab);
+			container.BindFactory(weaponPrefab);
 
 
 			container.BindNew<PlayerStats>();

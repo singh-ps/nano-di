@@ -1,103 +1,138 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
 namespace NanoDI
 {
-	public class Container
+	public sealed class Container
 	{
-		private readonly Dictionary<Type, object> references = new();
+		private readonly Dictionary<Type, object> instances = new();
+		private readonly Dictionary<Type, FieldInfo[]> injFieldCache = new();
+		private readonly Dictionary<Type, Action<object, Container>> compiledInjectors = new();
 
-		public void BindNew<T>() where T : new()
-		{
-			object instance = (T)Resolve(typeof(T));
-			references[typeof(T)] = instance;
-		}
+		const BindingFlags FLAGS = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
+		/// <summary>
+		/// Bind an existing, fully constructed instance. Does NOT inject or initialize.
+		/// Duplicate binds are illegal and throw.
+		/// </summary>
 		public void Bind<T>(T instance)
 		{
-			references.Add(typeof(T), instance);
+			if (instance == null) throw new ArgumentNullException(nameof(instance));
+			Type key = typeof(T);
+			if (instances.ContainsKey(key))
+				throw new InvalidOperationException($"[Container] Duplicate bind for {key}. This is likely a mistake.");
+			instances[key] = instance!;
 		}
 
-		public T Get<T>() => (T)Resolve(typeof(T));
-
-		public PrefabFactory<T> CreateFactory<T>(T prefab) where T : Component, IInitializable
+		/// <summary>
+		/// Create a new instance via parameterless constructor (new T()), then perform FIELD injection,
+		/// ALWAYS call Initialize() if implemented, and finally store it.
+		/// Throws if a dependency is missing or T already bound.
+		/// </summary>
+		public T BindNew<T>() where T : new()
 		{
-			PrefabFactory <T> factory = new PrefabFactory<T>(this, prefab);
-			references[typeof(PrefabFactory<T>)] = factory;
-			return factory;
+			Type key = typeof(T);
+			if (instances.ContainsKey(key))
+				throw new InvalidOperationException($"[Container] Duplicate bind for {key}. This is likely a mistake.");
+
+			T instance = new T();
+			Inject(instance); // throws if missing deps
+			if (instance is IInitializable init) init.Initialize();
+			instances[key] = instance;
+			return instance;
+		}
+
+		/// <summary>
+		/// Inject FIELD dependencies into an arbitrary object. Throws if any dependency is missing.
+		/// </summary>
+		internal void Inject(object instance)
+		{
+			if (instance == null) throw new ArgumentNullException(nameof(instance));
+			Type type = instance.GetType();
+			
+			// Try compiled injector first (fastest path)
+			if (compiledInjectors.TryGetValue(type, out Action<object, Container> compiledInjector))
+			{
+				compiledInjector(instance, this);
+				return;
+			}
+			
+			FieldInfo[] fields = GetInjectFields(type);
+
+			// Create compiled injector for future use
+			if (fields.Length > 0)
+			{
+				Action<object, Container> injector = CreateCompiledInjector(type, fields);
+				compiledInjectors[type] = injector;
+				injector(instance, this);
+			}
+		}
+
+		private FieldInfo[] GetInjectFields(Type type)
+		{
+			if (injFieldCache.TryGetValue(type, out var cached))
+				return cached;
+
+			List<FieldInfo> list = new List<FieldInfo>(8);
+			Type t = type;
+			while (t != null && t != typeof(object))
+			{
+				FieldInfo[] fields = t.GetFields(FLAGS);
+				for (int i = 0; i < fields.Length; i++)
+				{
+					FieldInfo f = fields[i];
+					if (Attribute.IsDefined(f, typeof(InjectAttribute), inherit: true))
+						list.Add(f);
+				}
+				t = t.BaseType;
+			}
+
+			FieldInfo[] arr = list.Count == 0 ? Array.Empty<FieldInfo>() : list.ToArray();
+			injFieldCache[type] = arr;
+			return arr;
+		}
+
+		public void BindFactory<T>(T prefab) where T : Component, IInitializable
+		{
+			if (instances.ContainsKey(typeof(PrefabFactory<T>)))
+				throw new InvalidOperationException($"[Container] Duplicate bind for PrefabFactory<{typeof(T)}>.");
+
+			PrefabFactory<T> factory = new PrefabFactory<T>(this, prefab);
+			instances[typeof(PrefabFactory<T>)] = factory;
+		}
+
+		public void BindFactory<T>() where T : IInitializable, new()
+		{
+			if (instances.ContainsKey(typeof(Factory<T>)))
+				throw new InvalidOperationException($"[Container] Duplicate bind for Factory<{typeof(T)}>.");
+
+			Factory<T> factory = new Factory<T>(this);
+			instances[typeof(Factory<T>)] = factory;
 		}
 
 		public void ClearBindings()
 		{
-			references.Clear();
+			instances.Clear();
+			injFieldCache.Clear();
+			compiledInjectors.Clear();
 		}
 
-		private object Resolve(Type instanceType)
+		private Action<object, Container> CreateCompiledInjector(Type type, FieldInfo[] fields)
 		{
-			if (references.TryGetValue(instanceType, out object instance))
-				return instance;
-
-			Type implType = instanceType.IsInterface || instanceType.IsAbstract
-				? throw new InvalidOperationException($"No binding for {instanceType}")
-				: instanceType;
-
-			ConstructorInfo ctor = implType.GetConstructors()
-				.FirstOrDefault(c => c.IsDefined(typeof(InjectAttribute), true))
-				??
-				implType.GetConstructors()
-					.OrderByDescending(c => c.GetParameters().Length)
-					.First();
-
-			object[] args = ctor.GetParameters()
-						   .Select(p => Resolve(p.ParameterType))
-						   .ToArray();
-
-			instance = ctor.Invoke(args);
-
-			InjectMembers(instance);
-
-			if (instance is IInitializable init)
+			// Simple delegate compilation for better performance
+			return (instance, container) =>
 			{
-				init.Initialize();
-			}
-
-			references[instanceType] = instance;
-
-			return instance;
-		}
-
-		private void InjectMembers(object instance)
-		{
-			Type type = instance.GetType();
-
-			foreach (FieldInfo field in type
-					 .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-					 .Where(f => f.IsDefined(typeof(InjectAttribute), true)))
-			{
-				object value = Resolve(field.FieldType);
-				field.SetValue(instance, value);
-			}
-
-			foreach (PropertyInfo prop in type
-					 .GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-					 .Where(p => p.IsDefined(typeof(InjectAttribute), true)
-								 && p.CanWrite))
-			{
-				object value = Resolve(prop.PropertyType);
-				prop.SetValue(instance, value);
-			}
-		}
-
-		public void InjectGameObject(GameObject go)
-		{
-			foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true))
-			{
-				InjectMembers(mb);
-				if (mb is IInitializable init) init.Initialize();
-			}
+				for (int i = 0; i < fields.Length; i++)
+				{
+					FieldInfo f = fields[i];
+					Type depType = f.FieldType;
+					if (!container.instances.TryGetValue(depType, out object dep))
+						throw new InvalidOperationException($"[Container] Missing binding for dependency {depType} required by {type}.{f.Name}");
+					f.SetValue(instance, dep);
+				}
+			};
 		}
 	}
 }
