@@ -7,6 +7,7 @@ namespace GamePlay
 	{
 		[Inject] private PlayerStats playerStats;
 		[Inject] private PrefabFactory<Weapon> weaponFactory;
+		[Inject] private IInputProvider inputProvider;
 
 		private Weapon weapon;
 
@@ -14,6 +15,8 @@ namespace GamePlay
 		{
 			Debug.Log("Initializing Player");
 			weapon = weaponFactory.Create(null, "Weapon", Vector3.zero, Quaternion.identity);
+
+			inputProvider.GetLatestInput();
 		}
 
 		public void TakeDamage(int damage)
