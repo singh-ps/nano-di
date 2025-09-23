@@ -2,7 +2,7 @@
 
 This folder contains comprehensive examples demonstrating all features of the NanoDI dependency injection framework.
 
-> **📦 UPM Note**: These samples are designed for Unity Package Manager. Import them via **Window → Package Manager → NanoDI → Samples**.
+> **UPM Note**: These samples are designed for Unity Package Manager. Import them via **Window → Package Manager → NanoDI → Samples**.
 
 ---
 
@@ -10,7 +10,7 @@ This folder contains comprehensive examples demonstrating all features of the Na
 
 The **GamePlay** sample showcases a complete game architecture using NanoDI, demonstrating all core features through a practical game scenario with players, enemies, weapons, and input systems.
 
-### 📁 Project Structure
+### Project Structure
 
 ```
 GamePlay/
@@ -36,15 +36,17 @@ GamePlay/
 └── EnemyStats.cs                  # Enemy statistics
 ```
 
-### 🎯 Features Demonstrated
+### Features Demonstrated
 
 #### 1. **All Binding Types**
+
 - **`BindNew<T>()`** - Create and inject singletons
 - **`Bind<T>(instance)`** - Bind existing instances with conditional logic
 - **`BindFactory<T>(prefab)`** - Unity prefab factories
 - **`BindFactory<T>()`** - Plain C# object factories
 
 #### 2. **Field Injection Patterns**
+
 ```csharp
 public class Player : MonoBehaviour, IInitializable
 {
@@ -55,6 +57,7 @@ public class Player : MonoBehaviour, IInitializable
 ```
 
 #### 3. **Interface-Based Dependency Injection**
+
 ```csharp
 // Conditional binding based on configuration
 IInputProvider inputProvider = useGamePad ? new GamepadInput() : new KeyboardInput();
@@ -62,6 +65,7 @@ container.Bind(inputProvider);
 ```
 
 #### 4. **Inheritance Hierarchies**
+
 ```csharp
 public class BaseEnemy : MonoBehaviour, IInitializable
 {
@@ -76,6 +80,7 @@ public class MeleeEnemy : BaseEnemy  // Inherits injection capabilities
 ```
 
 #### 5. **Factory Usage Patterns**
+
 ```csharp
 public class EnemySystem : IInitializable
 {
@@ -86,9 +91,9 @@ public class EnemySystem : IInitializable
     {
         // Create enemies with injection
         var enemy = meleeEnemyFactory.Create(
-            null, 
-            "MeleeEnemy[0]", 
-            Vector3.zero, 
+            null,
+            "MeleeEnemy[0]",
+            Vector3.zero,
             Quaternion.identity
         );
     }
@@ -96,6 +101,7 @@ public class EnemySystem : IInitializable
 ```
 
 #### 6. **Initialization Lifecycle**
+
 ```csharp
 public class GameManager : IInitializable
 {
@@ -111,9 +117,10 @@ public class GameManager : IInitializable
 }
 ```
 
-### 🏗️ Setup Instructions
+### Setup Instructions
 
 #### **Import Sample via Package Manager**
+
 1. Open **Window → Package Manager**
 2. Select **NanoDI** package
 3. Expand **Samples** section
@@ -121,6 +128,7 @@ public class GameManager : IInitializable
 5. Sample will be imported to `Assets/Samples/NanoDI/[version]/GamePlay/`
 
 #### **Manual Setup (if needed)**
+
 1. Create a `Resources/` folder in your project
 2. Right-click → **Create → NanoDI → DIContext**
 3. Name it `GamePlayDIContext`
@@ -128,22 +136,25 @@ public class GameManager : IInitializable
 5. Add the `GamePlayCR` composition root to the compositions list
 
 #### **Configure Composition Root**
+
 1. Locate the imported `GamePlayCR` asset
 2. Assign prefab references:
    - `meleeEnemyPrefab` - MeleeEnemy prefab
-   - `rangedEnemyPrefab` - RangedEnemy prefab  
+   - `rangedEnemyPrefab` - RangedEnemy prefab
    - `playerPrefab` - Player prefab
    - `weaponPrefab` - Weapon prefab
 3. Configure `useGamePad` toggle for input switching
 
 #### **Prefab Configuration**
+
 - The sample includes pre-configured prefabs
 - Ensure all prefabs have their respective components attached
 - **Important**: Prefabs are saved as **inactive** to guarantee injection happens before `Awake()`
 
-### 📋 Key Classes Overview
+### Key Classes Overview
 
 #### **Services (Singletons)**
+
 - **`GameManager`** - Main game coordinator, demonstrates initialization order
 - **`UIManager`** - UI management service
 - **`GameAnalytics`** - Analytics logging service
@@ -152,16 +163,18 @@ public class GameManager : IInitializable
 - **`EnemyStats`** - Enemy statistics data
 
 #### **Systems**
+
 - **`EnemySystem`** - Enemy spawning and management, demonstrates object factories
 - **`IInputProvider`** - Input abstraction with multiple implementations
 
 #### **Prefab Components**
+
 - **`Player`** - Player controller with weapon factory usage
 - **`Weapon`** - Weapon component with stats injection
 - **`BaseEnemy`** - Base enemy class with protected field injection
 - **`MeleeEnemy/RangedEnemy`** - Enemy variants demonstrating inheritance
 
-### 🎮 Runtime Flow
+### Runtime Flow
 
 1. **Startup** - `DIContext` initializes before scene load
 2. **Composition** - `GamePlayCR.Compose()` binds all dependencies
@@ -169,60 +182,70 @@ public class GameManager : IInitializable
 4. **Factory Usage** - Systems create players, enemies, weapons with full injection
 5. **Runtime** - All objects have their dependencies satisfied
 
-### 🔧 Configuration Options
+### Configuration Options
 
 #### **Input System Toggle**
+
 ```csharp
 [SerializeField] private bool useGamePad; // In GamePlayCR inspector
 ```
+
 - `false` - Uses KeyboardInput implementation
 - `true` - Uses GamepadInput implementation
 
 #### **Error Demonstration**
+
 Uncomment these lines in `GamePlayCR.cs` to see duplicate binding errors:
+
 ```csharp
 // DEMO: This would throw - duplicate binding (uncomment to test)
 // container.BindNew<PlayerStats>();
 // container.BindNew<PlayerStats>(); // InvalidOperationException
 ```
 
-### 🚀 Learning Outcomes
+### Learning Outcomes
 
 After studying this sample, you'll understand:
 
-✅ **Complete NanoDI feature set** - All binding types and injection patterns  
-✅ **Real-world architecture** - Practical game development patterns  
-✅ **Interface-based design** - Polymorphic dependency injection  
-✅ **Factory patterns** - Both prefab and object creation  
-✅ **Initialization lifecycle** - Proper startup sequencing  
-✅ **Error handling** - What happens when bindings are missing or duplicated  
-✅ **Performance considerations** - Compiled injection and caching  
+- **Complete NanoDI feature set** - All binding types and injection patterns
+- **Real-world architecture** - Practical game development patterns
+- **Interface-based design** - Polymorphic dependency injection
+- **Factory patterns** - Both prefab and object creation
+- **Initialization lifecycle** - Proper startup sequencing
+- **Error handling** - What happens when bindings are missing or duplicated
+- **Performance considerations** - Compiled injection and caching
 
-### 🔍 Advanced Patterns
+### Advanced Patterns
 
 #### **Conditional Binding**
+
 The sample demonstrates runtime configuration-based binding:
+
 ```csharp
 IInputProvider inputProvider = useGamePad ? new GamepadInput() : new KeyboardInput();
 container.Bind(inputProvider);
 ```
 
 #### **Mixed Factory Types**
+
 Shows both prefab factories (Unity components) and object factories (plain C#):
+
 ```csharp
 container.BindFactory(playerPrefab);        // PrefabFactory<Player>
 container.BindFactory<EnemySystem>();       // Factory<EnemySystem>
 ```
 
 #### **Hierarchical Injection**
+
 Demonstrates injection across inheritance hierarchies:
+
 ```csharp
 BaseEnemy → MeleeEnemy/RangedEnemy  // Protected field inheritance
 ```
 
 ---
 
-## 📦 Package Manager Integration
+## Package Manager Integration
 
 This sample is designed for Unity Package Manager distribution:
 

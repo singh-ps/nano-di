@@ -1,27 +1,33 @@
 # NanoDI
 
-A minimal, fast dependency injection framework for Unity.  
+[![Unity Version](https://img.shields.io/badge/Unity-2022.3+-57b9d3.svg?style=flat&logo=unity)](https://unity3d.com/get-unity/download)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![UPM Package](https://img.shields.io/badge/UPM-com.singh--ps.nanodi-blue)](https://github.com/singh-ps/nano-di)
+
+A minimal, blazing-fast dependency injection framework for Unity.  
 **Field injection only.** **No service locator.** **Factory-first creation.**
+
+> **Production-ready** • **Zero allocations** • **IL2CPP safe** • **UPM compatible**
 
 ---
 
 ## Features
 
-- **Field injection only** — no property, method, or constructor injection.
-- **Non‑recursive container** — the container never auto-constructs graphs.
-- **Fail‑fast** — duplicate binds throw; missing dependencies during injection throw with clear messages.
-- **Factory‑first** — use `Factory<T>` (plain objects) and `PrefabFactory<T>` (Unity prefabs).
-- **Deterministic lifecycle** — `BindNew<T>()` always calls `Initialize()` (if implemented) after injection.
-- **Performance‑minded** — per‑type reflection cache and compiled injectors; zero‑alloc prefab scanning.
+- **Field injection only** — Clean, simple approach with no property/method/constructor injection complexity
+- **Non‑recursive container** — The container never auto-constructs dependency graphs
+- **Fail‑fast validation** — Duplicate binds and missing dependencies throw immediately with clear error messages
+- **Factory‑first creation** — Use `Factory<T>` for plain objects and `PrefabFactory<T>` for Unity prefabs
+- **Deterministic lifecycle** — `BindNew<T>()` guarantees `Initialize()` is called after injection
+- **High performance** — Per‑type reflection cache, compiled injectors, and zero‑allocation prefab scanning
 
 ---
 
 ## Design Principles
 
-- **Simple by default**: keep DI lean; push complexity into factories and composition.
-- **Explicit composition**: all bindings are declared in `CompositionRoot` assets executed by `DIContext` before scene load.
-- **No service locator**: you don’t “get” instances from the container; you **bind** and **inject** via factories.
-- **Strict wiring**: if something isn’t bound, that’s a bug—throw early.
+- **Simple by default**: Keep DI lean; push complexity into factories and composition
+- **Explicit composition**: All bindings declared in `CompositionRoot` assets executed by `DIContext` before scene load
+- **No service locator**: You don't "get" instances from the container; you **bind** and **inject** via factories
+- **Strict wiring**: If something isn't bound, that's a bug—fail early and clearly
 
 ---
 
@@ -29,142 +35,237 @@ A minimal, fast dependency injection framework for Unity.
 
 ### Container
 
-- `Bind<T>(instance)` — store an _already constructed_ instance; **no injection** happens here. Duplicate binds are illegal.
-- `BindNew<T>()` — `new T()` → **field inject** → **`Initialize()` if implemented** → store. Throws on missing deps or duplicate type.
-- Internal APIs (used by factories only):
-  - `Inject(object)` — field‑injects dependencies into an object.
-  - `InjectGameObject(GameObject, ...)` — field‑injects across a hierarchy; calls `Initialize()` on components that implement it.
+**Public APIs:**
 
-> Injection scans **only fields declared on the concrete type** (uses `BindingFlags.DeclaredOnly`). Private fields declared in base classes are **not** injected.
+- `Bind<T>(instance)` — Store an _already constructed_ instance with **no injection**. Duplicate binds are illegal
+- `BindNew<T>()` — `new T()` → **field inject** → **`Initialize()` if implemented** → store. Throws on missing dependencies or duplicate types
+- `BindFactory<T>()` — Register a `Factory<T>` for creating injectable plain objects
+- `BindFactory<T>(prefab)` — Register a `PrefabFactory<T>` for creating injectable Unity prefabs
+
+**Internal APIs** (used by factories only):
+
+- `Inject(object)` — Field‑inject dependencies into an object
+- `InjectGameObject(GameObject, ...)` — Field‑inject across a hierarchy; calls `Initialize()` on components that implement it
+
+> **Important**: Injection scans **only fields declared on the concrete type** (uses `BindingFlags.DeclaredOnly`). Private fields declared in base classes are **not** injected.
 
 ### CompositionRoot + DIContext
 
-- Create one or more `CompositionRoot` assets (ScriptableObjects) and implement `Compose(Container container)`.
-- Create a single **enabled** `DIContext` asset in `Resources/`. At startup (BeforeSceneLoad), it constructs a `Container` and runs all `Compose(...)` methods in order.
+1. Create one or more `CompositionRoot` assets (ScriptableObjects) and implement `Compose(Container container)`
+2. Create a **single enabled** `DIContext` asset in `Resources/`
+3. At startup (`BeforeSceneLoad`), it constructs a `Container` and runs all `Compose(...)` methods in dependency order
 
 ### Factories
 
-- **Factory<T>** — for plain objects (`where T : IInitializable, new()`):
-  - `Create()` → `new T()` → inject → `Initialize()` → return.
-- **PrefabFactory<T>** — for prefabs (`where T : Component, IInitializable`):
-  - `Create(parent, name, position, rotation)` → `Instantiate(prefab)` → inject whole hierarchy → `Initialize()` components that implement it → return `T` on the root.
+**Factory<T>** — For plain objects (`where T : IInitializable, new()`):
 
-> To guarantee injection before `Awake()`, save DI’d prefabs **inactive** in your project. Instantiate will inherit the inactive state, then the factory injects and finally you may activate.
+- `Create()` → `new T()` → inject → `Initialize()` → return
+
+**PrefabFactory<T>** — For prefabs (`where T : Component, IInitializable`):
+
+- `Create(parent, name, position, rotation)` → `Instantiate(prefab)` → inject whole hierarchy → `Initialize()` components that implement it → return `T` on the root
+
+> **Pro tip**: To guarantee injection before `Awake()`, save DI'd prefabs **inactive** in your project. The factory inherits the inactive state, injects dependencies, then you can activate safely.
 
 ---
 
 ## Installation
 
-1. Copy the `NanoDI` scripts into your Unity project (any assembly definition is fine).
-2. Create a `Resources/` folder and add a **DIContext** asset:
-   - `Create → NanoDI → DIContext`
-   - Check **enabled**
-   - Add your `CompositionRoot` assets to its list
-3. Ensure exactly **one** enabled `DIContext` exists in `Resources/`.
+### Unity Package Manager (Recommended)
+
+1. **Add via Git URL**:
+
+   - Open **Window → Package Manager**
+   - Click **+** → **Add package from git URL**
+   - Enter: `https://github.com/singh-ps/nano-di.git?path=Packages/NanoDI`
+
+2. **Add via manifest.json**:
+   ```json
+   {
+     "dependencies": {
+       "com.singh-ps.nanodi": "https://github.com/singh-ps/nano-di.git?path=Packages/NanoDI"
+     }
+   }
+   ```
+
+### Manual Installation
+
+1. Download the latest [release](https://github.com/singh-ps/nano-di/releases)
+2. Extract and copy the `NanoDI` folder to your project's `Packages/` directory
+
+### Import Samples
+
+After installation, import the comprehensive GamePlay sample:
+
+- **Window → Package Manager** → **NanoDI** → **Samples** → **Import**
 
 ---
 
-## Usage
+## Quick Start
 
-### 1) Define your services
+### 1. Setup DIContext
+
+After installation, create the DI context:
+
+1. Create a `Resources/` folder in your project
+2. **Right-click** → **Create** → **NanoDI** → **DIContext**
+3. Check **enabled**
+4. Add your `CompositionRoot` assets to the list
+
+### 2. Define Your Services
 
 ```csharp
+using NanoDI;
+
 public class UIManager : IInitializable
 {
-    public void Initialize() { /* setup ui */ }
-    public void Show(string id) { /* ... */ }
+    public void Initialize() => Debug.Log("UI Manager initialized!");
+    public void ShowHUD() => Debug.Log("Showing HUD");
 }
 
 public class GameManager : IInitializable
 {
-    [Inject] private UIManager _ui;
+    [Inject] private UIManager _ui;  // Field injection
 
     public void Initialize()
     {
-        _ui.Show("HUD");
+        _ui.ShowHUD();  // Dependencies are ready!
     }
 }
 ```
 
-### 2) Bind them in a CompositionRoot
+### 3. Create a CompositionRoot
 
 ```csharp
+[CreateAssetMenu(menuName = "Game/Composition Root")]
 public class GameComposition : CompositionRoot
 {
-    public override void Compose(Container c)
+    public override void Compose(Container container)
     {
-        c.BindNew<UIManager>();
-        c.BindNew<GameManager>();
+        container.BindNew<UIManager>();     // Creates and injects UIManager
+        container.BindNew<GameManager>();   // Creates and injects GameManager
     }
 }
 ```
 
-### 3) Plain object creation via Factory<T>
+### 4. Add CompositionRoot to DIContext
+
+1. **Right-click** → **Create** → **Game** → **Composition Root**
+2. Open your `DIContext` asset in `Resources/`
+3. Add the `GameComposition` asset to the compositions list
+
+## Advanced Usage
+
+### Factory Pattern for Dynamic Objects
+
+Perfect for spawning enemies, projectiles, or any runtime objects:
 
 ```csharp
 public class Enemy : IInitializable
 {
-    [Inject] private UIManager _ui;
-    public void Initialize() { /* uses _ui */ }
-}
+    [Inject] private GameAnalytics _analytics;
 
-public class GameplayComposition : CompositionRoot
-{
-    public override void Compose(Container c)
+    public void Initialize()
     {
-        c.BindNew<UIManager>();
-        c.BindFactory<Enemy>(); // binds Factory<Enemy>
+        _analytics.TrackEnemySpawned();
     }
 }
-```
 
-Now inject the factory where you need it:
-
-```csharp
-public class Spawner : MonoBehaviour, IInitializable
+public class EnemySpawner : MonoBehaviour, IInitializable
 {
     [Inject] private Factory<Enemy> _enemyFactory;
 
+    public void Initialize() { }
+
+    public void SpawnEnemy()
+    {
+        var enemy = _enemyFactory.Create();  // Fully injected!
+    }
+}
+
+// In your CompositionRoot:
+public override void Compose(Container container)
+{
+    container.BindNew<GameAnalytics>();
+    container.BindFactory<Enemy>();        // Registers Factory<Enemy>
+}
+```
+
+### PrefabFactory for Unity GameObjects
+
+Handle complex prefabs with full dependency injection:
+
+```csharp
+public class PlayerController : MonoBehaviour, IInitializable
+{
+    [Inject] private IInputProvider _input;
+    [Inject] private GameManager _gameManager;
+
     public void Initialize()
     {
-        var e = _enemyFactory.Create(); // injected & initialized
+        Debug.Log("Player ready with all dependencies!");
+    }
+}
+
+public class GameComposition : CompositionRoot
+{
+    [SerializeField] private PlayerController playerPrefab;  // Assign in inspector
+
+    public override void Compose(Container container)
+    {
+        container.Bind<IInputProvider>(new KeyboardInput());
+        container.BindNew<GameManager>();
+        container.BindFactory(playerPrefab);  // Registers PrefabFactory<PlayerController>
+    }
+}
+
+// Usage:
+public class LevelManager : MonoBehaviour, IInitializable
+{
+    [Inject] private PrefabFactory<PlayerController> _playerFactory;
+
+    public void Initialize()
+    {
+        var player = _playerFactory.Create(
+            parent: transform,
+            name: "Player",
+            position: Vector3.zero,
+            rotation: Quaternion.identity
+        );
+        // Player and ALL child components are injected!
     }
 }
 ```
 
-### 4) Prefab creation via PrefabFactory<T>
+### Interface-Based Dependencies
+
+Use interfaces for flexible, testable code:
 
 ```csharp
-public class EnemyController : MonoBehaviour, IInitializable
+public interface IInputProvider
 {
-    [Inject] private UIManager _ui;
-    public void Initialize() { /* uses _ui */ }
+    Vector2 GetMovementInput();
 }
 
-public class PrefabComposition : CompositionRoot
+public class KeyboardInput : IInputProvider
 {
-    public EnemyController enemyPrefab; // assign in the asset
-
-    public override void Compose(Container c)
-    {
-        c.BindNew<UIManager>();
-        c.BindFactory(enemyPrefab);      // binds PrefabFactory<EnemyController>
-    }
+    public Vector2 GetMovementInput() =>
+        new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
 }
-```
 
-Use it:
-
-```csharp
-public class EnemyWave : MonoBehaviour, IInitializable
+public class TouchInput : IInputProvider
 {
-    [Inject] private PrefabFactory<EnemyController> _enemyFactory;
+    public Vector2 GetMovementInput() => /* touch logic */;
+}
 
-    public void Initialize()
-    {
-        var enemy = _enemyFactory.Create(transform, "Enemy_A", Vector3.zero, Quaternion.identity);
-        // enemy and its hierarchy are injected; IInitializable components have run Initialize()
-    }
+// In CompositionRoot - easy to swap implementations:
+public override void Compose(Container container)
+{
+    IInputProvider input = Application.isMobilePlatform
+        ? new TouchInput()
+        : new KeyboardInput();
+
+    container.Bind(input);  // Bind interface to implementation
 }
 ```
 
@@ -172,31 +273,26 @@ public class EnemyWave : MonoBehaviour, IInitializable
 
 ## Rules & Guarantees
 
-- Only **fields** marked with `[Inject]` are injected.
-- Injection reads **only fields declared on the concrete type** (no base‑type private fields).
-- `BindNew<T>()` always calls `Initialize()` (if implemented) after injection.
-- Duplicate binds (same `T`) are illegal and throw.
-- No service locator: there is **no** `Get<T>()`/`TryGet<T>()` API.
-- Factories are the only public way to construct and inject new objects/prefabs.
+- **Only fields** marked with `[Inject]` are injected
+- **Field discovery** is cached per type for optimal performance
+- **`BindNew<T>()`** always calls `Initialize()` after injection
+- **Compiled injectors** provide fast, IL2CPP-safe injection
+- **Duplicate binds** throw `InvalidOperationException`
+- **Missing dependencies** throw with clear error messages
+- **No service locator** — no `Get<T>()`/`TryGet<T>()` methods
+- **No base class fields** — only declared fields are injected
 
 ---
 
 ## Performance Notes
 
-- Field discovery is cached per type; subsequent injections skip attribute scans.
-- Injection uses a **compiled delegate** per type for fast repeat calls (IL2CPP‑safe).
-- `PrefabFactory` uses `GetComponentsInChildren(true, List<T>)` with a **reused buffer** (no per‑spawn arrays).
-
----
-
-## Next Steps
-
-- Unity Package Manager (UPM) distribution.
-- Child scopes (scene/subsystem containers).
-- Editor tooling to bake prefab “injection manifests” for zero‑scan instantiation.
+- **Reflection cache**: Field discovery is cached per type; subsequent injections skip attribute scans
+- **Compiled injection**: Uses compiled delegates for lightning-fast repeat injections (IL2CPP‑safe)
+- **Zero-alloc prefabs**: `PrefabFactory` uses `GetComponentsInChildren(true, List<T>)` with reused buffers
+- **Minimal overhead**: Container operations are optimized for game development performance requirements
 
 ---
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
