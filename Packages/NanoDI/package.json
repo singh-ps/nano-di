@@ -1,0 +1,32 @@
+{
+  "name": "com.singh-ps.nanodi",
+  "version": "1.0.0",
+  "displayName": "NanoDI",
+  "description": "A minimal, fast dependency injection framework for Unity",
+  "unity": "2022.3",
+  "keywords": [
+    "dependency injection",
+    "di",
+    "ioc",
+    "unity"
+  ],
+  "author": {
+    "name": "Pushpinder Singh",
+    "email": "pushpindersingh89@hotmail.com",
+    "url": "https://github.com/singh-ps/nano-di"
+  },
+  "files": [
+    "Runtime/**",
+    "Samples~/**",
+    "package.json",
+    "package.json.meta",
+    "Runtime.meta"
+  ],
+  "samples": [
+    {
+      "displayName": "NanoDI Sample",
+      "description": "Complete game architecture demonstrating all NanoDI features",
+      "path": "Samples~"
+    }
+  ]
+}
